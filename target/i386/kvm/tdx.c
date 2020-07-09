@@ -17,8 +17,10 @@
 #include "sysemu/kvm.h"
 #include "sysemu/sysemu.h"
 
+#include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
 #include "hw/i386/tdvf.h"
+#include "hw/i386/tdvf-hob.h"
 #include "kvm_i386.h"
 #include "tdx.h"
 
@@ -135,11 +137,118 @@ static int tdx_validate_attributes(TdxGuest *tdx)
     return 0;
 }
 
+static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
+{
+    TdxFirmwareEntry *entry;
+
+    for_each_tdx_fw_entry(tdx, entry) {
+        if (entry->type == TDVF_SECTION_TYPE_TD_HOB) {
+            return entry;
+        }
+    }
+    error_report("TDVF metadata doesn't specify TD_HOB location.");
+    exit(1);
+}
+
+static void tdx_add_ram_entry(uint64_t address, uint64_t length, uint32_t type)
+{
+    uint32_t nr_entries = tdx_guest->nr_ram_entries;
+    tdx_guest->ram_entries = g_renew(TdxRamEntry, tdx_guest->ram_entries,
+                                     nr_entries + 1);
+
+    tdx_guest->ram_entries[nr_entries].address = address;
+    tdx_guest->ram_entries[nr_entries].length = length;
+    tdx_guest->ram_entries[nr_entries].type = type;
+    tdx_guest->nr_ram_entries++;
+}
+
+static int tdx_change_ram_entry(uint64_t address, uint64_t length)
+{
+    TdxRamEntry *e;
+    int i;
+
+    for (i = 0; i < tdx_guest->nr_ram_entries; i++) {
+        e = &tdx_guest->ram_entries[i];
+
+        if (address + length < e->address ||
+            e->address + e->length < address) {
+                continue;
+        }
+
+        if (e->address > address ||
+            e->address + e->length < address + length) {
+            return -EINVAL;
+        }
+
+        if (e->address == address && e->length == length) {
+            e->type = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
+        } else if (e->address == address) {
+            e->address += length;
+            e->length -= length;
+            tdx_add_ram_entry(address, length, EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE);
+        } else if (e->address + e->length == address + length) {
+            e->length -= length;
+            tdx_add_ram_entry(address, length, EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE);
+        } else {
+            TdxRamEntry tmp = {
+                .address = e->address,
+                .length = e->length,
+            };
+            e->length = address - tmp.address;
+
+            tdx_add_ram_entry(address, length, EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE);
+            tdx_add_ram_entry(address + length,
+                              tmp.address + tmp.length - (address + length),
+                              EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED);
+        }
+
+        return 0;
+    }
+
+    return -1;
+}
+
+static int tdx_ram_entry_compare(const void *lhs_, const void* rhs_)
+{
+    const TdxRamEntry *lhs = lhs_;
+    const TdxRamEntry *rhs = rhs_;
+
+    if (lhs->address == rhs->address) {
+        return 0;
+    }
+    if (le64_to_cpu(lhs->address) > le64_to_cpu(rhs->address)) {
+        return 1;
+    }
+    return -1;
+}
+
+static void tdx_init_ram_entries(void)
+{
+    unsigned i, j, nr_e820_entries;
+
+    nr_e820_entries = e820_get_num_entries();
+    tdx_guest->ram_entries = g_new(TdxRamEntry, nr_e820_entries);
+
+    for (i = 0, j = 0; i < nr_e820_entries; i++) {
+        uint64_t addr, len;
+
+        if (e820_get_entry(i, E820_RAM, &addr, &len)) {
+            tdx_guest->ram_entries[j].address = addr;
+            tdx_guest->ram_entries[j].length = len;
+            tdx_guest->ram_entries[j].type = EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED;
+            j++;
+        }
+    }
+    tdx_guest->nr_ram_entries = j;
+}
+
 static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     MachineState *ms = MACHINE(qdev_get_machine());
     void *base_ram_ptr = memory_region_get_ram_ptr(ms->ram);
     TdxFirmwareEntry *entry;
+
+    tdx_init_ram_entries();
 
     for_each_tdx_fw_entry(tdx_guest, entry) {
         if (entry->type == TDVF_SECTION_TYPE_BFV) {
@@ -156,8 +265,14 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
             }
         } else {
             entry->mem_ptr = base_ram_ptr + entry->address;
+
+            tdx_change_ram_entry(entry->address, entry->size);
         }
     }
+
+    qsort(tdx_guest->ram_entries, tdx_guest->nr_ram_entries,
+          sizeof(TdxRamEntry), &tdx_ram_entry_compare);
+    tdvf_hob_create(tdx_guest, tdx_get_hob_entry(tdx_guest));
 }
 
 static Notifier tdx_machine_done_late_notify = {

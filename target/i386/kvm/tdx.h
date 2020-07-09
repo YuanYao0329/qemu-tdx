@@ -25,6 +25,12 @@ typedef struct TdxFirmwareEntry {
     void *mem_ptr;
 } TdxFirmwareEntry;
 
+typedef struct TdxRamEntry {
+    uint64_t address;
+    uint64_t length;
+    uint32_t type;
+} TdxRamEntry;
+
 typedef struct TdxGuest {
     ConfidentialGuestSupport parent_obj;
 
@@ -35,6 +41,9 @@ typedef struct TdxGuest {
 
     uint32_t nr_fw_entries;
     TdxFirmwareEntry *fw_entries;
+
+    uint32_t nr_ram_entries;
+    TdxRamEntry *ram_entries;
 
     bool split_tdvf;
     void *bfv_ptr;
