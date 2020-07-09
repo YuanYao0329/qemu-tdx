@@ -47,11 +47,13 @@ typedef struct {
 #define TDVF_SIGNATURE_LE32     0x46564454 /* TDVF as little endian */
 
 typedef struct {
-    uint8_t Signature[4];
+    uint32_t Signature;
     uint32_t Length;
     uint32_t Version;
     uint32_t NumberOfSectionEntries;
     TdvfSectionEntry SectionEntries[];
 } TdvfMetadata;
+
+int tdvf_parse_metadata(void *flash_ptr, int size);
 
 #endif /* HW_I386_TDVF_H */
