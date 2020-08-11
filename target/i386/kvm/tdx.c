@@ -230,6 +230,8 @@ static void tdx_post_init_vcpu(void)
 
     hob = tdx_get_hob_entry(tdx_guest);
     CPU_FOREACH(cpu) {
+        apic_force_x2apic(X86_CPU(cpu)->apic_state);
+
         r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
         if (r < 0) {
             error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
@@ -315,6 +317,11 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
     if (!tdx) {
+        return -EINVAL;
+    }
+
+    if (!kvm_enable_x2apic()) {
+        error_setg(errp, "Failed to enable x2apic in KVM");
         return -EINVAL;
     }
 
