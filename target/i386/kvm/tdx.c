@@ -322,6 +322,11 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         return r;
     }
 
+    if (!kvm_enable_x2apic()) {
+        error_report("Failed to enable x2apic in KVM");
+        return -EINVAL;
+    }
+
     qemu_add_machine_init_done_notifier(&tdx_machine_done_late_notify);
 
     return 0;
@@ -456,6 +461,8 @@ int tdx_post_init_vcpu(CPUState *cpu)
     if (r < 0) {
         error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
     }
+
+    apic_force_x2apic(X86_CPU(cpu)->apic_state);
 
     return r;
 }
