@@ -342,6 +342,9 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         return -EINVAL;
     }
 
+    x86ms->eoi_intercept_unsupported = true;
+    x86ms->ioapic_tdx_mode = true;
+
     qemu_add_machine_init_done_notifier(&tdx_machine_done_late_notify);
 
     return 0;
