@@ -168,12 +168,33 @@ static void ioapic_common_set_level_trigger_unsupported(Object *obj, bool value,
     s->level_trigger_unsupported = value;
 }
 
+static bool ioapic_common_get_tdx_mode(Object *obj, Error **errp)
+{
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+    return s->tdx_mode;
+}
+
+static void ioapic_common_set_tdx_mode(Object *obj, bool value,
+                                                       Error **errp)
+{
+    DeviceState *dev = DEVICE(obj);
+    IOAPICCommonState *s = IOAPIC_COMMON(obj);
+
+    /* only disabling before realize is allowed */
+    assert(!dev->realized);
+    assert(!s->tdx_mode);
+    s->tdx_mode = value;
+}
+
 static void ioapic_common_init(Object *obj)
 {
     object_property_add_bool(obj, "level_trigger_unsupported",
                              ioapic_common_get_level_trigger_unsupported,
                              ioapic_common_set_level_trigger_unsupported);
 
+    object_property_add_bool(obj, "tdx_mode",
+                             ioapic_common_get_tdx_mode,
+                             ioapic_common_set_tdx_mode);
 }
 
 static void ioapic_common_realize(DeviceState *dev, Error **errp)
