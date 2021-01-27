@@ -13,6 +13,11 @@ int tdx_pre_create_vcpu(CPUState *cpu)
     return -EINVAL;
 }
 
+int tdx_post_init_vcpu(CPUState *cpu)
+{
+    return -EINVAL;
+}
+
 void tdx_set_bfv_cfv_ptr(void *bfv_ptr, void *cfv_ptr, bool split_tdvf)
 {
 }

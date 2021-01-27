@@ -65,6 +65,7 @@ int tdx_kvm_init(MachineState *ms, Error **errp);
 void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu);
+int tdx_post_init_vcpu(CPUState *cpu);
 void tdx_set_bfv_cfv_ptr(void *bfv_ptr, void *cfv_ptr, bool split_tdvf);
 
 #endif /* QEMU_I386_TDX_H */

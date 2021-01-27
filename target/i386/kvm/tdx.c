@@ -417,6 +417,24 @@ void tdx_set_bfv_cfv_ptr(void *bfv_ptr, void *cfv_ptr, bool split_tdvf)
     tdx_guest->split_tdvf = split_tdvf;
 }
 
+int tdx_post_init_vcpu(CPUState *cpu)
+{
+    TdxFirmwareEntry *hob;
+    int r;
+
+    if (!tdx_guest) {
+        return -EINVAL;
+    }
+
+    hob = tdx_get_hob_entry(tdx_guest);
+    r = tdx_vcpu_ioctl(cpu, KVM_TDX_INIT_VCPU, 0, (void *)hob->address);
+    if (r < 0) {
+        error_report("KVM_TDX_INIT_VCPU failed %s", strerror(-r));
+    }
+
+    return r;
+}
+
 /* tdx guest */
 OBJECT_DEFINE_TYPE_WITH_INTERFACES(TdxGuest,
                                    tdx_guest,

@@ -4236,6 +4236,16 @@ int kvm_arch_put_registers(CPUState *cpu, int level)
 
     assert(cpu_is_stopped(cpu) || qemu_cpu_is_self(cpu));
 
+    /*
+     * level == KVM_PUT_FULL_STATE is only set by
+     * kvm_cpu_synchronize_post_init() after initialization
+     */
+    if (is_tdx_vm() && level == KVM_PUT_FULL_STATE) {
+        ret = tdx_post_init_vcpu(cpu);
+        if (ret < 0)
+            return ret;
+    }
+
     /* must be before kvm_put_nested_state so that EFER.SVME is set */
     ret = kvm_put_sregs(x86_cpu);
     if (ret < 0) {
