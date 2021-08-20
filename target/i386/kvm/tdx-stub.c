@@ -22,3 +22,7 @@ void tdx_set_code_vars_ptr(void *code_ptr, void *vars_ptr)
 {
     g_assert_not_reached();
 }
+
+void tdx_handle_exit(X86CPU *cpu, struct kvm_tdx_exit *tdx_exit)
+{
+}
