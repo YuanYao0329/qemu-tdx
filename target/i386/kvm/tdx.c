@@ -20,6 +20,13 @@
 
 #define TDX_TD_ATTRIBUTES_DEBUG     BIT_ULL(0)
 
+static TdxGuest *tdx_guest;
+
+bool is_tdx_vm(void)
+{
+    return !!tdx_guest;
+}
+
 enum tdx_ioctl_level{
     TDX_PLATFORM_IOCTL,
     TDX_VM_IOCTL,
