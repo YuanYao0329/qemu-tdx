@@ -35,7 +35,14 @@ typedef struct TdxGuest {
 
     uint32_t nr_fw_entries;
     TdxFirmwareEntry *fw_entries;
+
+    bool split_tdvf;
+    void *bfv_ptr;
+    void *cfv_ptr;
 } TdxGuest;
+
+#define for_each_tdx_fw_entry(tdx, e)    \
+    for (e = (tdx)->fw_entries; e != (tdx)->fw_entries + (tdx)->nr_fw_entries; e++)
 
 #ifdef CONFIG_TDX
 bool is_tdx_vm(void);
@@ -49,5 +56,6 @@ int tdx_kvm_init(MachineState *ms, Error **errp);
 void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
                              uint32_t *ret);
 int tdx_pre_create_vcpu(CPUState *cpu);
+void tdx_set_bfv_cfv_ptr(void *bfv_ptr, void *cfv_ptr, bool split_tdvf);
 
 #endif /* QEMU_I386_TDX_H */

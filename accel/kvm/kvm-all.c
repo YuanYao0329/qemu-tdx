@@ -1366,7 +1366,7 @@ static void kvm_set_phys_mem(KVMMemoryListener *kml,
     void *ram;
 
     if (!memory_region_is_ram(mr)) {
-        if (writeable || !kvm_readonly_mem_allowed) {
+        if (writeable) {
             return;
         } else if (!mr->romd_mode) {
             /* If the memory device is not in romd_mode, then we actually want

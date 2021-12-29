@@ -15,8 +15,10 @@
 #include "qom/object_interfaces.h"
 #include "standard-headers/asm-x86/kvm_para.h"
 #include "sysemu/kvm.h"
+#include "sysemu/sysemu.h"
 
 #include "hw/i386/x86.h"
+#include "hw/i386/tdvf.h"
 #include "kvm_i386.h"
 #include "tdx.h"
 
@@ -133,8 +135,38 @@ static int tdx_validate_attributes(TdxGuest *tdx)
     return 0;
 }
 
+static void tdx_finalize_vm(Notifier *notifier, void *unused)
+{
+    MachineState *ms = MACHINE(qdev_get_machine());
+    void *base_ram_ptr = memory_region_get_ram_ptr(ms->ram);
+    TdxFirmwareEntry *entry;
+
+    for_each_tdx_fw_entry(tdx_guest, entry) {
+        if (entry->type == TDVF_SECTION_TYPE_BFV) {
+            if (!tdx_guest->split_tdvf) {
+                entry->mem_ptr = tdx_guest->bfv_ptr + entry->data_offset;
+            } else {
+                entry->mem_ptr = tdx_guest->bfv_ptr;
+            }
+        } else if( entry->type == TDVF_SECTION_TYPE_CFV) {
+            if (!tdx_guest->split_tdvf) {
+                entry->mem_ptr = tdx_guest->bfv_ptr;
+            } else {
+                entry->mem_ptr = tdx_guest->cfv_ptr;
+            }
+        } else {
+            entry->mem_ptr = base_ram_ptr + entry->address;
+        }
+    }
+}
+
+static Notifier tdx_machine_done_late_notify = {
+    .notify = tdx_finalize_vm,
+};
+
 int tdx_kvm_init(MachineState *ms, Error **errp)
 {
+    int r;
     TdxGuest *tdx = (TdxGuest *)object_dynamic_cast(OBJECT(ms->cgs),
                                                     TYPE_TDX_GUEST);
     if (!tdx) {
@@ -145,7 +177,14 @@ int tdx_kvm_init(MachineState *ms, Error **errp)
         get_tdx_capabilities();
     }
 
-    return tdx_validate_attributes(tdx);
+    r = tdx_validate_attributes(tdx);
+    if (r) {
+        return r;
+    }
+
+    qemu_add_machine_init_done_notifier(&tdx_machine_done_late_notify);
+
+    return 0;
 }
 
 void tdx_get_supported_cpuid(uint32_t function, uint32_t index, int reg,
@@ -254,6 +293,13 @@ int tdx_pre_create_vcpu(CPUState *cpu)
 out:
     qemu_mutex_unlock(&tdx_guest->lock);
     return r;
+}
+
+void tdx_set_bfv_cfv_ptr(void *bfv_ptr, void *cfv_ptr, bool split_tdvf)
+{
+    tdx_guest->bfv_ptr = bfv_ptr;
+    tdx_guest->cfv_ptr = cfv_ptr;
+    tdx_guest->split_tdvf = split_tdvf;
 }
 
 /* tdx guest */

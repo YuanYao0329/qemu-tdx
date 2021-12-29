@@ -148,8 +148,8 @@ static void pc_system_flash_map(PCMachineState *pcms,
     int64_t size;
     PFlashCFI01 *system_flash;
     MemoryRegion *flash_mem;
-    void *flash_ptr;
-    int flash_size;
+    void *flash_ptr[2];
+    int flash_size[2];
     int ret;
 
     assert(PC_MACHINE_GET_CLASS(pcms)->pci_enabled);
@@ -190,31 +190,40 @@ static void pc_system_flash_map(PCMachineState *pcms,
         sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0,
                         0x100000000ULL - total_size);
 
+        flash_mem = pflash_cfi01_get_memory(system_flash);
+        flash_ptr[i] = memory_region_get_ram_ptr(flash_mem);
+        flash_size[i] = memory_region_size(flash_mem);
+	printf("flash_ptr[%d] 0x%p, size 0x%x\n", i, flash_ptr[i], flash_size[i]);
         if (i == 0) {
-            flash_mem = pflash_cfi01_get_memory(system_flash);
             pc_isa_bios_init(rom_memory, flash_mem, size);
 
-            flash_ptr = memory_region_get_ram_ptr(flash_mem);
-            flash_size = memory_region_size(flash_mem);
             /*
              * OVMF places a GUIDed structures in the flash, so
              * search for them
              */
-            pc_system_parse_ovmf_flash(flash_ptr, flash_size);
+            pc_system_parse_ovmf_flash(flash_ptr[i], flash_size[i]);
 
             /* Encrypt the pflash boot ROM */
             if (sev_enabled()) {
 
-                ret = sev_es_save_reset_vector(flash_ptr, flash_size);
+                ret = sev_es_save_reset_vector(flash_ptr[i], flash_size[i]);
                 if (ret) {
                     error_report("failed to locate and/or save reset vector");
                     exit(1);
                 }
 
-                sev_encrypt_flash(flash_ptr, flash_size, &error_fatal);
+                sev_encrypt_flash(flash_ptr[i], flash_size[i], &error_fatal);
             } else if (is_tdx_vm()) {
-                tdvf_parse_metadata(flash_ptr, flash_size);
+                tdvf_parse_metadata(flash_ptr[i], flash_size[i]);
             }
+        }
+    }
+
+    if (is_tdx_vm()) {
+        if (!flash_ptr[1]) {
+            tdx_set_bfv_cfv_ptr(flash_ptr[0], flash_ptr[1], false);
+        } else {
+            tdx_set_bfv_cfv_ptr(flash_ptr[0], flash_ptr[1], true);
         }
     }
 }
