@@ -22,8 +22,10 @@ typedef struct TdxGuest {
 
 #ifdef CONFIG_TDX
 bool is_tdx_vm(void);
+TdxGuest *get_tdx_guest(void);
 #else
 #define is_tdx_vm() 0
+inline TdxGuest *get_tdx_guest(void) {return NULL;}
 #endif /* CONFIG_TDX */
 
 int tdx_kvm_init(MachineState *ms, Error **errp);
