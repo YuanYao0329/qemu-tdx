@@ -27,6 +27,16 @@ bool is_tdx_vm(void)
     return !!tdx_guest;
 }
 
+TdxGuest *get_tdx_guest(void)
+{
+    if (!tdx_guest) {
+        error_report("tdx_guest not initialized!\n");
+        exit(1);
+    }
+
+    return tdx_guest;
+}
+
 enum tdx_ioctl_level{
     TDX_VM_IOCTL,
     TDX_VCPU_IOCTL,
