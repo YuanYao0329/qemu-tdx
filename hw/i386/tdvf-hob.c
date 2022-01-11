@@ -141,11 +141,14 @@ static void tdvf_hob_add_memory_resources(TdvfHob *hob)
         e = &tdx->ram_entries[i];
 
         if (e->type == EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED) {
-            resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
+            resource_type = EFI_RESOURCE_MEMORY_UNACCEPTED;
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_UNACCEPTED;
-        } else {
-            resource_type = EFI_RESOURCE_MEMORY_RESERVED;
+        } else if (e->type == EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE){
+            resource_type = EFI_RESOURCE_SYSTEM_MEMORY;
             attr = EFI_RESOURCE_ATTRIBUTE_TDVF_PRIVATE;
+        } else {
+            error_report("unknown TDXRAMENTRY type %d", e->type);
+            exit(1);
         }
 
         region = tdvf_get_area(hob, sizeof(*region));
