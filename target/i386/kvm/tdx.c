@@ -20,7 +20,6 @@
 #include "tdx.h"
 
 enum tdx_ioctl_level{
-    TDX_PLATFORM_IOCTL,
     TDX_VM_IOCTL,
     TDX_VCPU_IOCTL,
 };
@@ -38,9 +37,6 @@ static int __tdx_ioctl(void *state, enum tdx_ioctl_level level, int cmd_id,
     tdx_cmd.data = (__u64)(unsigned long)data;
 
     switch (level) {
-    case TDX_PLATFORM_IOCTL:
-        r = kvm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
-        break;
     case TDX_VM_IOCTL:
         r = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
         break;
@@ -54,9 +50,6 @@ static int __tdx_ioctl(void *state, enum tdx_ioctl_level level, int cmd_id,
 
     return r;
 }
-
-#define tdx_platform_ioctl(cmd_id, metadata, data) \
-        __tdx_ioctl(NULL, TDX_PLATFORM_IOCTL, cmd_id, metadata, data)
 
 #define tdx_vm_ioctl(cmd_id, metadata, data) \
         __tdx_ioctl(NULL, TDX_VM_IOCTL, cmd_id, metadata, data)
@@ -78,7 +71,7 @@ static void get_tdx_capabilities(void)
         caps = g_malloc0(size);
         caps->nr_cpuid_configs = max_ent;
 
-        r = tdx_platform_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+        r = tdx_vm_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
         if (r == -E2BIG) {
             g_free(caps);
             max_ent *= 2;
