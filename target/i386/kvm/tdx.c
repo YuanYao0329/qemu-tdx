@@ -54,6 +54,7 @@ TdxGuest *get_tdx_guest(void)
 enum tdx_ioctl_level{
     TDX_VM_IOCTL,
     TDX_VCPU_IOCTL,
+    TDX_PLATFORM_IOCTL,
 };
 
 static int __tdx_ioctl(void *state, enum tdx_ioctl_level level, int cmd_id,
@@ -69,6 +70,9 @@ static int __tdx_ioctl(void *state, enum tdx_ioctl_level level, int cmd_id,
     tdx_cmd.data = (__u64)(unsigned long)data;
 
     switch (level) {
+    case TDX_PLATFORM_IOCTL:
+        r = kvm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
+        break;
     case TDX_VM_IOCTL:
         r = kvm_vm_ioctl(kvm_state, KVM_MEMORY_ENCRYPT_OP, &tdx_cmd);
         break;
@@ -82,6 +86,9 @@ static int __tdx_ioctl(void *state, enum tdx_ioctl_level level, int cmd_id,
 
     return r;
 }
+
+#define tdx_platform_ioctl(cmd_id, metadata, data) \
+        __tdx_ioctl(NULL, TDX_PLATFORM_IOCTL, cmd_id, metadata, data)
 
 #define tdx_vm_ioctl(cmd_id, metadata, data) \
         __tdx_ioctl(NULL, TDX_VM_IOCTL, cmd_id, metadata, data)
@@ -104,6 +111,11 @@ static void get_tdx_capabilities(void)
         caps->nr_cpuid_configs = max_ent;
 
         r = tdx_vm_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+        if (r == -EINVAL ) {
+            g_free(caps);
+            break;
+        }
+
         if (r == -E2BIG) {
             g_free(caps);
             max_ent *= 2;
@@ -113,6 +125,26 @@ static void get_tdx_capabilities(void)
         }
     }
     while (r == -E2BIG);
+
+    if (r == -EINVAL) {
+        max_ent = 1;
+        do {
+            size = sizeof(struct kvm_tdx_capabilities) +
+                max_ent * sizeof(struct kvm_tdx_cpuid_config);
+            caps = g_malloc0(size);
+            caps->nr_cpuid_configs = max_ent;
+
+            r = tdx_platform_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+            if (r == -E2BIG) {
+                g_free(caps);
+                max_ent *= 2;
+            } else if (r < 0) {
+                error_report("KVM_TDX_CAPABILITIES failed: %s\n", strerror(-r));
+                exit(1);
+            }
+        }
+        while (r == -E2BIG);
+    }
 
     tdx_caps = caps;
 }
