@@ -119,6 +119,11 @@ static void get_tdx_capabilities(void)
         caps->nr_cpuid_configs = max_ent;
 
         r = tdx_platform_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+        if (r == -EINVAL ) {
+            g_free(caps);
+            break;
+        }
+
         if (r == -E2BIG) {
             g_free(caps);
             max_ent *= 2;
@@ -128,6 +133,26 @@ static void get_tdx_capabilities(void)
         }
     }
     while (r == -E2BIG);
+
+    if (r == -EINVAL) {
+        max_ent = 1;
+        do {
+            size = sizeof(struct kvm_tdx_capabilities) +
+                max_ent * sizeof(struct kvm_tdx_cpuid_config);
+            caps = g_malloc0(size);
+            caps->nr_cpuid_configs = max_ent;
+
+            r = tdx_vm_ioctl(KVM_TDX_CAPABILITIES, 0, caps);
+            if (r == -E2BIG) {
+                g_free(caps);
+                max_ent *= 2;
+            } else if (r < 0) {
+                error_report("KVM_TDX_CAPABILITIES failed: %s\n", strerror(-r));
+                exit(1);
+            }
+        }
+        while (r == -E2BIG);
+    }
 
     tdx_caps = caps;
 }
