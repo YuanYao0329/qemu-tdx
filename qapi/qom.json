@@ -794,11 +794,14 @@
 #
 # @sept-ve-disable: attributes.sept-ve-disable[bit 28] (default: 0)
 #
+# @debug: Whether it's a debug TD or not (default: 0)
+#
 # Since: 6.2
 ##
 { 'struct': 'TdxGuestProperties',
   'data': { '*attributes': 'uint64',
-            '*sept-ve-disable': 'bool' } }
+            '*sept-ve-disable': 'bool',
+            '*debug': 'bool' } }
 
 ##
 # @ObjectType:
