@@ -38,6 +38,7 @@
 #include "hw/block/flash.h"
 #include "sysemu/kvm.h"
 #include "sev.h"
+#include "kvm/tdx.h"
 
 #define FLASH_SECTOR_SIZE 4096
 
@@ -184,6 +185,7 @@ static void pc_system_flash_map(PCMachineState *pcms,
         total_size += size;
         qdev_prop_set_uint32(DEVICE(system_flash), "num-blocks",
                              size / FLASH_SECTOR_SIZE);
+        qdev_prop_set_bit(DEVICE(system_flash), "ram-mode", is_tdx_vm());
         sysbus_realize_and_unref(SYS_BUS_DEVICE(system_flash), &error_fatal);
         sysbus_mmio_map(SYS_BUS_DEVICE(system_flash), 0,
                         0x100000000ULL - total_size);
@@ -245,7 +247,7 @@ void pc_system_firmware_init(PCMachineState *pcms,
         /* Machine property pflash0 not set, use ROM mode */
         x86_bios_rom_init(MACHINE(pcms), "bios.bin", rom_memory, false);
     } else {
-        if (kvm_enabled() && !kvm_readonly_mem_enabled()) {
+        if (kvm_enabled() && (!kvm_readonly_mem_enabled() && !is_tdx_vm())) {
             /*
              * Older KVM cannot execute from device memory. So, flash
              * memory cannot be used unless the readonly memory kvm

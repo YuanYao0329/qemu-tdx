@@ -87,6 +87,7 @@ struct PFlashCFI01 {
     void *storage;
     VMChangeStateEntry *vmstate;
     bool old_multiple_chip_handling;
+    bool ram_mode;  /* if 1, the flash is mapped as RAM */
 };
 
 static int pflash_post_load(void *opaque, int version_id);
@@ -818,11 +819,15 @@ static void pflash_cfi01_realize(DeviceState *dev, Error **errp)
 
     total_len = pfl->sector_len * pfl->nb_blocs;
 
-    memory_region_init_rom_device(
-        &pfl->mem, OBJECT(dev),
-        &pflash_cfi01_ops,
-        pfl,
-        pfl->name, total_len, errp);
+    if (pfl->ram_mode) {
+        memory_region_init_ram(&pfl->mem, OBJECT(dev),pfl->name, total_len, errp);
+    } else {
+        memory_region_init_rom_device(
+            &pfl->mem, OBJECT(dev),
+            &pflash_cfi01_ops,
+            pfl,
+            pfl->name, total_len, errp);
+    }
     if (*errp) {
         return;
     }
@@ -924,6 +929,7 @@ static Property pflash_cfi01_properties[] = {
     DEFINE_PROP_STRING("name", PFlashCFI01, name),
     DEFINE_PROP_BOOL("old-multiple-chip-handling", PFlashCFI01,
                      old_multiple_chip_handling, false),
+    DEFINE_PROP_BOOL("ram-mode", PFlashCFI01, ram_mode, false),
     DEFINE_PROP_END_OF_LIST(),
 };
 
