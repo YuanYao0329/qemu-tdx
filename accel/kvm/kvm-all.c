@@ -2859,7 +2859,7 @@ static int kvm_encrypt_mem(hwaddr start, hwaddr size, bool shared_to_private)
     return r;
 }
 
-static int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
+int kvm_convert_memory(hwaddr start, hwaddr size, bool shared_to_private)
 {
     MemoryRegionSection section;
     void *addr;
