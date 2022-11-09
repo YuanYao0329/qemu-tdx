@@ -27,6 +27,7 @@
 #include "qemu/units.h"
 #include "qemu/datadir.h"
 #include "qemu/guest-random.h"
+#include "qom/object_interfaces.h"
 #include "qapi/error.h"
 #include "qapi/qmp/qerror.h"
 #include "qapi/qapi-visit-common.h"
@@ -1188,8 +1189,21 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
         (bios_size % 65536) != 0) {
         goto bios_error;
     }
-    bios = g_malloc(sizeof(*bios));
-    memory_region_init_ram(bios, NULL, "pc.bios", bios_size, &error_fatal);
+
+    if (object_dynamic_cast(OBJECT(ms->memdev),
+                            TYPE_MEMORY_BACKEND_MEMFD_PRIVATE)) {
+        HostMemoryBackend *m;
+
+        m = MEMORY_BACKEND(object_new(TYPE_MEMORY_BACKEND_MEMFD_PRIVATE));
+        if (!object_property_set_int(OBJECT(m), "size", bios_size, NULL) ||
+            !user_creatable_complete(USER_CREATABLE(m), NULL)) {
+            goto bios_error;
+        }
+        bios = &m->mr;
+    } else {
+        bios = g_malloc(sizeof(*bios));
+        memory_region_init_ram(bios, NULL, "pc.bios", bios_size, &error_fatal);
+    }
     if (sev_enabled() || is_tdx_vm()) {
         /*
          * The concept of a "reset" simply doesn't exist for
@@ -1199,6 +1213,8 @@ void x86_bios_rom_init(MachineState *ms, const char *default_firmware,
          * Just go for a straight file load instead.
          */
         void *ptr = memory_region_get_ram_ptr(bios);
+        if (is_tdx_vm())
+            tdx_set_tdvf_region(bios);
         load_image_size(filename, ptr, bios_size);
         x86_firmware_configure(ptr, bios_size);
     } else {

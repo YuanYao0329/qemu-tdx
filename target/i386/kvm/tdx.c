@@ -20,6 +20,7 @@
 #include "sysemu/sysemu.h"
 
 #include "exec/address-spaces.h"
+#include "exec/ramblock.h"
 #include "hw/i386/apic_internal.h"
 #include "hw/i386/e820_memory_layout.h"
 #include "hw/i386/x86.h"
@@ -746,6 +747,12 @@ static void update_tdx_cpuid_lookup_by_tdx_caps(void)
             (tdx_caps->xfam_fixed1 & CPUID_XSTATE_XSS_MASK) >> 32;
 }
 
+void tdx_set_tdvf_region(MemoryRegion *tdvf_region)
+{
+    assert(!tdx_guest->tdvf_region);
+    tdx_guest->tdvf_region = tdvf_region;
+}
+
 static TdxFirmwareEntry *tdx_get_hob_entry(TdxGuest *tdx)
 {
     TdxFirmwareEntry *entry;
@@ -884,6 +891,7 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
 {
     TdxFirmware *tdvf = &tdx_guest->tdvf;
     TdxFirmwareEntry *entry;
+    RAMBlock *ram_block;
     int r;
 
     tdx_init_ram_entries();
@@ -920,8 +928,8 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
             .nr_pages = entry->size / 4096,
         };
 
-	    r = kvm_convert_memory(entry->address, entry->size, true);
-	    if (r < 0) {
+        r = kvm_encrypt_reg_region(entry->address, entry->size, true);
+        if (r < 0) {
              error_report("Reserve initial private memory failed %s", strerror(-r));
              exit(1);
         }
@@ -948,6 +956,9 @@ static void tdx_finalize_vm(Notifier *notifier, void *unused)
         error_report("KVM_TDX_FINALIZE_VM failed %s", strerror(-r));
         exit(0);
     }
+    /* Tdvf image was copied into private region above. It becomes unnecessary. */
+    ram_block = tdx_guest->tdvf_region->ram_block;
+    ram_block_discard_range(ram_block, 0, ram_block->max_length);
     tdx_guest->parent_obj.ready = true;
 }
 
