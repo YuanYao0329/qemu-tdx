@@ -290,6 +290,11 @@ static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, boo
     KVMState *s = kvm_state;
     struct kvm_userspace_memory_region2 mem;
     int ret;
+    static int cap_user_memory2 = -1;
+
+    if (cap_user_memory2 == -1) {
+        cap_user_memory2 = kvm_check_extension(s, KVM_CAP_USER_MEMORY2);
+    }
 
     mem.slot = slot->slot | (kml->as_id << 16);
     mem.guest_phys_addr = slot->start_addr;
@@ -302,20 +307,29 @@ static int kvm_set_user_memory_region(KVMMemoryListener *kml, KVMSlot *slot, boo
         /* Set the slot size to 0 before setting the slot to the desired
          * value. This is needed based on KVM commit 75d61fbc. */
         mem.memory_size = 0;
-        ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION2, &mem);
+	if (cap_user_memory2) {
+            ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION2, &mem);
+	} else {
+	    ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
+	}
         if (ret < 0) {
             goto err;
         }
     }
     mem.memory_size = slot->memory_size;
-    ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION2, &mem);
+    if (cap_user_memory2) {
+        ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION2, &mem);
+    } else {
+        ret = kvm_vm_ioctl(s, KVM_SET_USER_MEMORY_REGION, &mem);
+    }
     slot->old_flags = mem.flags;
 err:
     trace_kvm_set_user_memory(mem.slot >> 16, (uint16_t)mem.slot, mem.flags,
                               mem.guest_phys_addr, mem.memory_size,
                               mem.userspace_addr, ret);
     if (ret < 0) {
-        error_report("%s: KVM_SET_USER_MEMORY_REGION2 failed, slot=%d,"
+	if (cap_user_memory2) {
+            error_report("%s: KVM_SET_USER_MEMORY_REGION2 failed, slot=%d,"
                      " start=0x%" PRIx64 ", size=0x%" PRIx64 ","
                      " flags=0x%" PRIx32 ","
                      " restricted_fd=%" PRId32 ", restricted_offset=0x%" PRIx64 ": %s",
@@ -323,6 +337,12 @@ err:
 		     (uint64_t)mem.memory_size, mem.flags,
                      mem.restricted_fd, (uint64_t)mem.restricted_offset,
                      strerror(errno));
+	} else {
+            error_report("%s: KVM_SET_USER_MEMORY_REGION failed, slot=%d,"
+                         " start=0x%" PRIx64 ", size=0x%" PRIx64 ": %s",
+			 __func__, mem.slot, slot->start_addr,
+			 (uint64_t)mem.memory_size, strerror(errno));
+	}
     }
     return ret;
 }
